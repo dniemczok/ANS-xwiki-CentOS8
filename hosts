@@ -1,0 +1,2 @@
+[tst]
+xwiki ansible_host=192.168.20.6 ansible_ssh_user=ansadmin ansible_ssh_pass=TC1234com!

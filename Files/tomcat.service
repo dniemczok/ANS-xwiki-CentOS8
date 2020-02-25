@@ -1,0 +1,23 @@
+[Unit]
+Description=Tomcat9
+After=network.target
+
+[Service]
+Type=forking
+User=root
+Group=root
+Environment=CATALINA_PID=/opt/apache-tomcat-9.0.31/tomcat9.pid
+Environment=JAVA_HOME=/usr/lib/jvm/java-13-openjdk-13.0.2.8-1.rolling.el8.x86_64
+Environment=CATALINA_HOME=/opt/apache-tomcat-9.0.31
+Environment=CATALINA_BASE=/opt/apache-tomcat-9.0.31
+Environment='CATALINA_OPTS=-Xms1024M -Xmx2048M -server -XX:+UseParallelGC'
+Environment='JAVA_OPTS=-Djava.awt.headless=true -Djava.security.egd=file:/dev/./urandom'
+
+ExecStart=/opt/apache-tomcat-9.0.31/bin/startup.sh
+ExecStop=/opt/apache-tomcat-9.0.31/bin/shutdown.sh
+
+RestartSec=10
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

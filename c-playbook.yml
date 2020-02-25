@@ -1,0 +1,151 @@
+-
+  name:                Instalacja Xwiki na CentOS8
+  hosts:               xwiki
+  remote_user:         root
+  become:              yes
+  tasks:
+
+ ## Instalacja Servera Tomcat 9.0.30
+
+    - name:            Set JAVA_HOME
+      lineinfile:
+        dest:          /etc/environment
+        state:         present
+        regexp:        '^JAVA_HOME'
+        line:          'JAVA_HOME=/usr/lib/jvm/java-13-openjdk-13.0.2.8-1.rolling.el8.x86_64'
+
+    - name:            Installacja wymaganych komponentow
+      yum:
+        update_cache:  yes
+        name:          "{{ item }}"
+        state:         present
+      with_items:
+        - java-latest-openjdk
+        - htop
+        - screen
+        - nmon
+        - iftop
+        #- libreoffice
+        - unzip
+        - procps
+        - curl
+        - postgresql-libs
+        - libpq-devel
+
+    - name:            Download Tomcat 9
+      get_url:
+        url:           http://ftp.man.poznan.pl/apache/tomcat/tomcat-9/v9.0.31/bin/apache-tomcat-9.0.31.tar.gz
+        dest:          /opt/tomcat9.tar.gz
+        mode:          '0777'
+
+    - name:            Extract Tomcat 9
+      unarchive:
+        src:           /opt/tomcat9.tar.gz
+        dest:          /opt/
+        remote_src:    yes
+
+    - name:            Copy /etc/systemd/system/tomcat.service
+      copy:
+        src:           ./Files/tomcat.service
+        dest:          /etc/systemd/system/tomcat.service
+        mode:          0644
+
+
+    - name:            Start and enable Tomcat service
+      systemd:
+        name:          tomcat
+        state:         restarted
+        enabled:       true
+        daemon_reload: true
+      become:          true
+
+    - name:            Download Xwiki
+      get_url:
+        url:           https://maven.xwiki.org/releases/org/xwiki/platform/xwiki-platform-distribution-war/12.0-rc-1/xwiki-platform-distribution-war-12.0-rc-1.war
+        dest:          /opt/xwiki.war
+        mode:          '0744'
+
+    - name:            Extract xwiki.war to tomcat ROOT
+      unarchive:
+        src:           /opt/xwiki.war
+        dest:          /opt/apache-tomcat-9.0.31/webapps/ROOT
+        remote_src:    yes
+
+## Instalacja Postgresql i Xwiki
+
+    - name:            Install repo
+      dnf:
+        name:          'https://download.postgresql.org/pub/repos/yum/reporpms/EL-8-x86_64/pgdg-redhat-repo-latest.noarch.rpm'
+        state:         present
+
+    - name:            Disable module PostGreSQL
+      command:         dnf -y module disable postgresql
+      ignore_errors:   yes
+
+    - name:            Disable module PostGreSQL
+      command:         dnf -y clean all
+      ignore_errors:   yes
+
+    - name:            Install PostGreSQL
+      command:         sudo dnf -y install postgresql11-server postgresql11
+
+    - name:            Initdb PostGreSQL
+      command:         /usr/pgsql-11/bin/postgresql-11-setup initdb
+      ignore_errors:   yes
+
+    - name:            Systemctl PostGreSQL
+      command:         systemctl enable --now postgresql-11
+
+    - name:            Download JDBC
+      get_url:
+        url:           https://maven.xwiki.org/releases/org/xwiki/platform/xwiki-platform-distribution-war/12.0-rc-1/xwiki-platform-distribution-war-12.0-rc-1.war
+        dest:          /opt/apache-tomcat-9.0.31/webapps/ROOT/WEB-INF/lib/postgresql-jdbc4.jar
+        mode:          '0644'
+
+    - name:            Copy hibernate.cfg.xml
+      copy:
+        src:           ./Files/hibernate.cfg.xml
+        dest:          /opt/apache-tomcat-9.0.31/webapps/ROOT/WEB-INF
+        mode:          0644
+
+
+    - name:            Copy pg_hba.conf
+      copy:
+        src:           ./Files/pg_hba.conf
+        dest:          /var/lib/pgsql/11/data/pg_hba.conf
+        mode:          0644
+
+    - name:            Restart Postgresql
+      command:         systemctl restart postgresql-11.service
+
+## Create database grant
+
+    - name:            DROP Database xwiki
+      command:         sudo -u postgres bash -c "psql -c 'DROP DATABASE xwiki;'"
+      ignore_errors:   yes
+
+    - name:            DROP OWNED xwiki
+      command:         sudo -u postgres bash -c "psql -c 'DROP OWNED BY xwiki;'"
+      ignore_errors:   yes
+
+    - name:            DROP USER xwiki
+      command:         sudo -u postgres bash -c "psql -c 'DROP USER xwiki;'"
+      ignore_errors:   yes
+
+    - name:            Create USER xwiki
+      command:         sudo -u postgres bash -c "psql -c \"CREATE USER xwiki WITH PASSWORD 'xwiki';\""
+
+    - name:            Create ROLE xwiki
+      command:         sudo -u postgres bash -c "psql -c \"ALTER USER xwiki PASSWORD 'xwiki';\""
+
+    - name:            Create Database xwiki
+      command:         sudo -u postgres bash -c "psql -c \"CREATE DATABASE xwiki WITH OWNER = xwiki ENCODING = 'UNICODE' TABLESPACE = pg_default;\""
+
+    - name:            Copy pg_hba0.conf
+      copy:
+        src:           ./Files/pg_hba0.conf
+        dest:          /var/lib/pgsql/11/data/pg_hba.conf
+        mode:          0644
+
+    - name:            Restart Postgresql
+      command:         systemctl restart postgresql-11.service
